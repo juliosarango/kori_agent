@@ -1,0 +1,82 @@
+{
+  "moneda": "USD",
+  "nota": "Vista derivada de catalogo.json, pensada para el RAG de cotizacion_tool. Los descuentos son por volumen y se aplican sobre precio_unitario.",
+  "productos": [
+    {
+      "producto_id": "ceramica-piso-45x45-andina",
+      "precio_unitario": 18.50,
+      "unidad": "m2",
+      "descuentos_volumen": [
+        {"cantidad_minima": 50, "descuento_pct": 5},
+        {"cantidad_minima": 100, "descuento_pct": 10}
+      ]
+    },
+    {
+      "producto_id": "ceramica-pared-30x60-blanco-liso",
+      "precio_unitario": 12.00,
+      "unidad": "m2",
+      "descuentos_volumen": [
+        {"cantidad_minima": 50, "descuento_pct": 5},
+        {"cantidad_minima": 100, "descuento_pct": 10}
+      ]
+    },
+    {
+      "producto_id": "bloque-cemento-15x20x40",
+      "precio_unitario": 0.45,
+      "unidad": "unidad",
+      "descuentos_volumen": [
+        {"cantidad_minima": 500, "descuento_pct": 8},
+        {"cantidad_minima": 2000, "descuento_pct": 15}
+      ]
+    },
+    {
+      "producto_id": "cemento-portland-50kg",
+      "precio_unitario": 9.80,
+      "unidad": "saco",
+      "descuentos_volumen": [
+        {"cantidad_minima": 20, "descuento_pct": 5},
+        {"cantidad_minima": 100, "descuento_pct": 12}
+      ]
+    },
+    {
+      "producto_id": "porcelanato-60x60-marmol-carrara",
+      "precio_unitario": 32.00,
+      "unidad": "m2",
+      "descuentos_volumen": [
+        {"cantidad_minima": 50, "descuento_pct": 5},
+        {"cantidad_minima": 100, "descuento_pct": 10}
+      ]
+    },
+    {
+      "producto_id": "ceramica-piso-60x60-gris-cemento",
+      "precio_unitario": 22.00,
+      "unidad": "m2",
+      "descuentos_volumen": [
+        {"cantidad_minima": 50, "descuento_pct": 5},
+        {"cantidad_minima": 100, "descuento_pct": 10}
+      ]
+    },
+    {
+      "producto_id": "adhesivo-porcelanato-25kg",
+      "precio_unitario": 8.90,
+      "unidad": "saco",
+      "descuentos_volumen": [
+        {"cantidad_minima": 20, "descuento_pct": 5}
+      ]
+    },
+    {
+      "producto_id": "fragua-gris-1kg",
+      "precio_unitario": 3.50,
+      "unidad": "unidad",
+      "descuentos_volumen": []
+    },
+    {
+      "producto_id": "varilla-hierro-12mm",
+      "precio_unitario": 8.75,
+      "unidad": "unidad",
+      "descuentos_volumen": [
+        {"cantidad_minima": 50, "descuento_pct": 6}
+      ]
+    }
+  ]
+}

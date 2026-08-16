@@ -1,0 +1,16 @@
+version = 0.1
+
+[default.deploy.parameters]
+confirm_changeset = false
+stack_name = "kori-agent"
+resolve_s3 = true
+capabilities = ["CAPABILITY_IAM"]
+fail_on_empty_changeset = false
+
+[default.deploy.parameters.parameter_overrides]
+TelegramBotToken = "PENDIENTE-configurar-bot-token"
+TelegramWebhookSecret = "PENDIENTE-configurar-webhook-secret"
+
+[default.global.parameters]
+region = "us-east-1"
+profile = "default"

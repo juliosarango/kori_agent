@@ -1,0 +1,4 @@
+# Kori Agent — dependencias para Lambda
+# boto3 ya viene en el runtime de Lambda, se pin igual para reproducibilidad local
+boto3>=1.43,<2.0
+strands-agents>=1.52,<2.0

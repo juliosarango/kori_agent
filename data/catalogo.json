@@ -1,0 +1,74 @@
+[
+  {
+    "producto_id": "ceramica-piso-45x45-andina",
+    "nombre": "Cerámica de piso 45x45 Colección Andina",
+    "descripcion": "Cerámica de piso 45x45cm, acabado mate, línea Andina. Ideal para interiores residenciales.",
+    "precio_unitario": 18.50,
+    "unidad": "m2",
+    "stock_disponible": 850
+  },
+  {
+    "producto_id": "ceramica-pared-30x60-blanco-liso",
+    "nombre": "Cerámica de pared 30x60 Blanco Liso",
+    "descripcion": "Cerámica de pared 30x60cm, blanco liso brillante. Uso común en cocinas y baños.",
+    "precio_unitario": 12.00,
+    "unidad": "m2",
+    "stock_disponible": 1200
+  },
+  {
+    "producto_id": "bloque-cemento-15x20x40",
+    "nombre": "Bloque de cemento 15x20x40",
+    "descripcion": "Bloque de cemento estructural 15x20x40cm para mampostería.",
+    "precio_unitario": 0.45,
+    "unidad": "unidad",
+    "stock_disponible": 6000
+  },
+  {
+    "producto_id": "cemento-portland-50kg",
+    "nombre": "Cemento Portland 50kg",
+    "descripcion": "Saco de cemento Portland tipo GU, 50kg, uso general en construcción.",
+    "precio_unitario": 9.80,
+    "unidad": "saco",
+    "stock_disponible": 400
+  },
+  {
+    "producto_id": "porcelanato-60x60-marmol-carrara",
+    "nombre": "Porcelanato 60x60 Mármol Carrara",
+    "descripcion": "Porcelanato 60x60cm, acabado pulido, diseño mármol Carrara. Línea premium.",
+    "precio_unitario": 32.00,
+    "unidad": "m2",
+    "stock_disponible": 300
+  },
+  {
+    "producto_id": "ceramica-piso-60x60-gris-cemento",
+    "nombre": "Cerámica de piso 60x60 Gris Cemento",
+    "descripcion": "Cerámica de piso 60x60cm, acabado símil cemento, tono gris. Alto tránsito.",
+    "precio_unitario": 22.00,
+    "unidad": "m2",
+    "stock_disponible": 500
+  },
+  {
+    "producto_id": "adhesivo-porcelanato-25kg",
+    "nombre": "Adhesivo para Porcelanato 25kg",
+    "descripcion": "Adhesivo cementicio de alta adherencia para porcelanato y piezas de gran formato, saco 25kg.",
+    "precio_unitario": 8.90,
+    "unidad": "saco",
+    "stock_disponible": 260
+  },
+  {
+    "producto_id": "fragua-gris-1kg",
+    "nombre": "Fragua Color Gris 1kg",
+    "descripcion": "Fragua cementicia color gris para junta de cerámica y porcelanato, presentación 1kg.",
+    "precio_unitario": 3.50,
+    "unidad": "unidad",
+    "stock_disponible": 700
+  },
+  {
+    "producto_id": "varilla-hierro-12mm",
+    "nombre": "Varilla de Hierro Corrugado 12mm x 6m",
+    "descripcion": "Varilla de hierro corrugado 12mm, longitud 6m, para refuerzo estructural.",
+    "precio_unitario": 8.75,
+    "unidad": "unidad",
+    "stock_disponible": 950
+  }
+]
