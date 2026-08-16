@@ -1,0 +1,15 @@
+# Kori Agent — theme base de Streamlit para el dashboard (dashboard/app.py).
+# Fija la paleta de marca a nivel de servidor para que no haya un flash
+# blanco antes de que cargue el CSS inyectado — importa en una demo en vivo.
+[theme]
+base = "dark"
+backgroundColor = "#0F1419"
+secondaryBackgroundColor = "#16202B"
+primaryColor = "#00B4D8"
+textColor = "#F5F3EF"
+font = "sans serif"
+
+[server]
+# el refresh cada 2s ya lo maneja st.rerun() en app.py — no hace falta
+# el auto-reload de archivos de Streamlit corriendo en la demo
+runOnSave = false

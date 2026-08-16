@@ -109,6 +109,72 @@ Es idempotente — sobrescribe por `producto_id`, no duplica. Ver `CLAUDE.md`, s
 
 ---
 
+## Dashboard Streamlit (EC2)
+
+El dashboard **no levanta una instancia nueva** — corre en la misma EC2 que ya tenés viva para otra cosa (`n8n-app`, `i-052bd40fd9843cc27`, Amazon Linux 2023, IP pública `3.95.210.95`). Puerto usado: **8501** (el 80/443 ya los ocupa lo que sea que sirva n8n ahí, no se tocan).
+
+Ya resuelto de antemano (no hace falta repetirlo):
+- Security group `launch-wizard-7` → regla nueva `8501/tcp` desde `0.0.0.0/0` agregada, sin tocar las reglas existentes de 22/80/443.
+- IAM: rol `kori-dashboard-ec2-role` + instance profile `kori-dashboard-ec2-profile`, con permiso de **solo lectura** (`Scan`/`GetItem`/`Query`) únicamente sobre `demo_leads` y `demo_trazas` — ya asociado a la instancia. No requiere `aws configure` ni credenciales estáticas en el disco: boto3 las toma automáticamente vía metadata del instance profile.
+
+### Deploy (por SSH, en la instancia)
+
+```bash
+ssh -i /ruta/a/n8n-key.pem ec2-user@3.95.210.95
+
+# clonar (o git pull si ya existe) el repo
+git clone https://github.com/juliosarango/kori_agent.git
+cd kori_agent
+
+python3 -m venv .venv-dashboard
+.venv-dashboard/bin/pip install -r dashboard/requirements.txt
+
+export AWS_REGION=us-east-1
+export DYNAMO_TABLE_LEADS=demo_leads
+export DYNAMO_TABLE_TRAZAS=demo_trazas
+
+# server.address 0.0.0.0 para que escuche en la IP pública, no solo localhost
+.venv-dashboard/bin/streamlit run dashboard/app.py \
+  --server.port 8501 --server.address 0.0.0.0
+```
+
+Con esto ya se ve en `http://3.95.210.95:8501`. Para que sobreviva el cierre de la sesión SSH y se reinicie solo si crashea a mitad del ensayo/evento, conviene un servicio systemd en vez de dejarlo corriendo en la terminal:
+
+```bash
+sudo tee /etc/systemd/system/kori-dashboard.service > /dev/null <<'EOF'
+[Unit]
+Description=Kori Agent - Dashboard Streamlit
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/kori_agent
+Environment=AWS_REGION=us-east-1
+Environment=DYNAMO_TABLE_LEADS=demo_leads
+Environment=DYNAMO_TABLE_TRAZAS=demo_trazas
+ExecStart=/home/ec2-user/kori_agent/.venv-dashboard/bin/streamlit run dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now kori-dashboard
+sudo systemctl status kori-dashboard   # confirmar "active (running)"
+```
+
+Para actualizar después de un cambio en `dashboard/app.py`:
+
+```bash
+cd ~/kori_agent && git pull
+sudo systemctl restart kori-dashboard
+```
+
+---
+
 ## Verificar que el deploy quedó bien
 
 ```bash

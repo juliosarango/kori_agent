@@ -1,0 +1,5 @@
+# Kori Agent — dependencias del dashboard (EC2 t3.micro, separado de Lambda)
+# boto3 ya está pineado en el requirements.txt de raíz; se repite acá porque
+# este archivo es lo que se instala solo en la instancia EC2 del dashboard.
+boto3>=1.43,<2.0
+streamlit>=1.38,<2.0

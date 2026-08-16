@@ -31,7 +31,7 @@ El handle de Telegram es `@koriagente_bot`. El nombre visible para los usuarios 
 | LLM sub-agentes | Amazon Bedrock — Claude Haiku (`us.anthropic.claude-haiku-4-5-20251001-v1:0`, inference profile) |
 | Base de datos | DynamoDB (3 tablas — ver abajo) |
 | Documentos RAG | S3 (context stuffing, sin embeddings) |
-| Dashboard | Streamlit corriendo en EC2 t3.micro |
+| Dashboard | Streamlit — reusa la instancia EC2 `n8n-app` (`i-052bd40fd9843cc27`, t3.small) ya corriendo, puerto 8501. No se levanta instancia nueva. |
 | Observabilidad | Strands hooks + CloudWatch |
 | Infra como código | AWS SAM (template.yaml) |
 
@@ -271,8 +271,19 @@ orchestrator = Agent(
 # Columna izquierda:  mensajes recientes de Telegram (tabla demo_leads)
 # Columna derecha:    trazas de orquestación (tabla demo_trazas)
 # Refresh: st.rerun() cada 2 segundos
-# Colores: usar paleta de marca (#0F1419 fondo, #00B4D8 acentos, #FFD700 éxito)
 ```
+
+**Paleta de marca (Julio Sarango — "IA con identidad"):**
+
+| Nombre | Hex | Uso |
+|---|---|---|
+| Noche Andina | `#0F1419` | 60% — fondo |
+| Turquesa Cloud | `#00B4D8` | 25% — acento principal (tool calls normales: atención/cotización/seguimiento) |
+| Púrpura Saraguro | `#7B2D8E` | 10% — acento secundario (trazas `guardrail` bloqueado — para que salte a la vista) |
+| Oro Inti | `#FFD700` | 5% — highlight puntual de éxito, no fondo |
+| Hueso | `#F5F3EF` | texto sobre fondos oscuros |
+
+**Tipografía:** Montserrat (titulares) / Open Sans (cuerpo) / JetBrains Mono (datos técnicos: `duracion_ms`, `evento_id`, `chat_id`, etc.)
 
 ---
 
@@ -295,13 +306,13 @@ orchestrator = Agent(
 - [x] Pruebas end-to-end de los 3 flujos desde Telegram real
 
 ### Semana 3 — 29 ago al 4 sep | Dashboard y ensayo — EN CURSO
-- [ ] `dashboard/app.py` Streamlit funcional con datos reales
-- [ ] Deploy Streamlit en EC2 t3.micro
+- [x] `dashboard/app.py` Streamlit funcional con datos reales (16 ago)
+- [ ] Deploy Streamlit en EC2 — reusando instancia `n8n-app` ya corriendo (`i-052bd40fd9843cc27`), no una t3.micro nueva. Puerto 8501 ya abierto en el security group `launch-wizard-7`. Falta: instalar deps + correr el proceso en la instancia (ver `README.md`).
 - [ ] Ensayo completo cronometrado (objetivo: 3 rondas en 14 minutos)
 - [ ] Documentar Plan B (qué hacer si Telegram falla: usar curl o Postman en pantalla)
 - [ ] Ensayo grabado sin errores → señal de go para el evento
 
-**Próximo paso al retomar:** arrancar con `dashboard/app.py` (Tarea #14 del plan). El sistema completo (webhook → orquestador → 3 tools → guardrail → trazas) ya funciona en producción, probado desde Telegram real.
+**Próximo paso al retomar:** desplegar `dashboard/app.py` en la instancia EC2 `n8n-app` (pasos en `README.md`) — falta resolver cómo la instancia obtiene credenciales de AWS para leer DynamoDB (no tiene IAM instance profile asociado hoy). El sistema completo (webhook → orquestador → 3 tools → guardrail → trazas) ya funciona en producción, probado desde Telegram real.
 
 ---
 
@@ -323,8 +334,8 @@ Si Telegram falla por conectividad en el venue:
 | Bedrock Sonnet (orquestador) | ~$3.00 |
 | DynamoDB on-demand | ~$0.50 |
 | S3 | ~$0.01 |
-| EC2 t3.micro (Streamlit) | ~$7.59 |
-| **Total** | **~$11.60/mes** |
+| EC2 (Streamlit) | $0 incremental — reusa `n8n-app`, ya corriendo por otro motivo |
+| **Total** | **~$4.01/mes** |
 
 Con créditos AWS Community Builder: $0 durante desarrollo y el evento.
 Costo del demo en vivo (50 personas, 3 rondas): ~$0.15.
