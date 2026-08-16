@@ -82,6 +82,49 @@ def _armar_status(event: AfterToolCallEvent) -> str:
     return "ok"
 
 
+def escribir_traza(
+    sub_agente: str,
+    duracion_ms: float,
+    status: str,
+    resumen: str,
+    *,
+    usuario: str | None = None,
+    mensaje_usuario: str | None = None,
+) -> None:
+    """Arma y escribe un item en demo_trazas con el shape estándar del
+    dashboard. Reusable: además de KoriTracerHook (tools), la usa
+    orchestrator.py para los dos casos que no pasan por AfterToolCallEvent
+    (guardrail a nivel del orquestador, mensaje fuera de alcance sin tool).
+
+    usuario/mensaje_usuario son opcionales a propósito: solo los llena
+    orchestrator.py para esos dos casos (queremos poder mostrar "Julio
+    preguntó X, quedó bloqueado" en el dashboard). Las trazas de tool calls
+    (KoriTracerHook, abajo) no los pasan — DynamoDB no tiene schema fijo,
+    así que esas filas simplemente no llevan esos atributos, sin tocar su
+    shape de siempre."""
+    item = {
+        "evento_id": str(uuid.uuid4()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "sub_agente": sub_agente,
+        "duracion_ms": Decimal(str(round(duracion_ms, 2))),
+        "status": status,
+        "resumen": resumen,
+    }
+    if usuario is not None:
+        item["usuario"] = usuario
+    if mensaje_usuario is not None:
+        item["mensaje_usuario"] = mensaje_usuario
+
+    try:
+        dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+        table = dynamodb.Table(DYNAMO_TABLE_TRAZAS)
+        table.put_item(Item=item)
+    except (ClientError, BotoCoreError) as exc:
+        logger.exception("tracer: fallo de AWS escribiendo traza en %s: %s", DYNAMO_TABLE_TRAZAS, exc)
+    except Exception:
+        logger.exception("tracer: error inesperado escribiendo traza")
+
+
 class KoriTracerHook(HookProvider):
     """HookProvider que registra BeforeToolCallEvent + AfterToolCallEvent
     para medir duración y escribir una traza en demo_trazas por cada tool
@@ -133,23 +176,7 @@ class KoriTracerHook(HookProvider):
             logger.warning("tracer: sin BeforeToolCallEvent pareja para toolUseId=%s", tool_use_id)
             duracion_ms = 0.0
 
-        item = {
-            "evento_id": str(uuid.uuid4()),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "sub_agente": sub_agente,
-            "duracion_ms": Decimal(str(duracion_ms)),
-            "status": _armar_status(event),
-            "resumen": _armar_resumen(event),
-        }
-
-        try:
-            dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
-            table = dynamodb.Table(DYNAMO_TABLE_TRAZAS)
-            table.put_item(Item=item)
-        except (ClientError, BotoCoreError) as exc:
-            logger.exception("tracer: fallo de AWS escribiendo traza en %s: %s", DYNAMO_TABLE_TRAZAS, exc)
-        except Exception:
-            logger.exception("tracer: error inesperado escribiendo traza")
+        escribir_traza(sub_agente, duracion_ms, _armar_status(event), _armar_resumen(event))
 
 
 # instancia lista para usar directo: Agent(hooks=[tracer_hook])

@@ -30,11 +30,12 @@ Notas sobre la API real de strands-agents 1.52 (CLAUDE.md trae pseudocódigo):
 
 import logging
 import os
+import time
 
 from strands import Agent, tool
 from strands.models.bedrock import BedrockModel
 
-from hooks.tracer import tracer_hook
+from hooks.tracer import escribir_traza, tracer_hook
 from tools.atencion_tool import atencion_tool
 from tools.cotizacion_tool import cotizacion_tool
 from tools.seguimiento_tool import _consultar_historial
@@ -146,18 +147,79 @@ def _truncar_para_telegram(texto: str) -> str:
     return texto[:corte] + "...\n\n(respuesta truncada, pídeme más detalle)"
 
 
-def procesar_mensaje(chat_id: str, mensaje: str) -> str:
+# las trazas sin tool sí muestran quién escribió y qué — a diferencia de
+# las trazas de tool calls, que quedan igual que siempre (ver tracer.py)
+MENSAJE_USUARIO_MAX_CHARS = 200
+
+
+def _registrar_traza_sin_tool(
+    sub_agente: str,
+    duracion_ms: float,
+    status: str,
+    resumen: str,
+    usuario: str,
+    mensaje_usuario: str,
+) -> None:
+    """Escribe una traza para los casos que KoriTracerHook no ve (no hubo
+    AfterToolCallEvent). Igual de defensivo que el hook: nunca puede tumbar
+    la respuesta a Telegram por un problema de trazado."""
+    try:
+        mensaje_truncado = mensaje_usuario[:MENSAJE_USUARIO_MAX_CHARS]
+        escribir_traza(
+            sub_agente,
+            duracion_ms,
+            status,
+            resumen,
+            usuario=usuario,
+            mensaje_usuario=mensaje_truncado,
+        )
+    except Exception:
+        logger.exception("orchestrator: fallo escribiendo traza sin tool call")
+
+
+def procesar_mensaje(chat_id: str, mensaje: str, nombre_usuario: str = "Usuario") -> str:
     """Punto de entrada: construye el orquestador para este chat_id y
-    procesa el mensaje. Usado por lambda_handler.py."""
+    procesa el mensaje. Usado por lambda_handler.py.
+
+    nombre_usuario es el first_name de Telegram (viene del payload del
+    webhook, sin llamada extra a la API) — solo se usa para las trazas de
+    guardrail/fuera-de-alcance, así el dashboard puede mostrar "Julio
+    preguntó X, quedó bloqueado" sin exponer el chat_id ni el @username
+    público en pantalla."""
     try:
         orchestrator = build_orchestrator(chat_id)
+
+        inicio = time.perf_counter()
         resultado = orchestrator(mensaje)
+        duracion_ms = round((time.perf_counter() - inicio) * 1000, 2)
 
         # a diferencia de atencion_tool (que llama converse() directo), acá
         # no hay tool call de por medio cuando el guardrail bloquea al nivel
         # del orquestador mismo — sin esto, ese caso queda invisible en logs
+        # y, sobre todo, ausente del dashboard (KoriTracerHook solo escribe
+        # trazas en AfterToolCallEvent, que acá nunca se dispara)
         if getattr(resultado, "stop_reason", None) == "guardrail_intervened":
             logger.info("orchestrator: guardrail intervino antes de llamar ningún tool")
+            _registrar_traza_sin_tool(
+                sub_agente="guardrail",
+                duracion_ms=duracion_ms,
+                status="blocked",
+                resumen="Guardrail intervino antes de ejecutar cualquier tool",
+                usuario=nombre_usuario,
+                mensaje_usuario=mensaje,
+            )
+        elif not resultado.metrics.tool_metrics:
+            # el orquestador respondió sin llamar ningún tool — pasa cuando
+            # el system_prompt le indica que el mensaje está fuera de
+            # alcance de Cerámica Austral; también queda fuera del hook
+            _registrar_traza_sin_tool(
+                sub_agente="orquestador",
+                duracion_ms=duracion_ms,
+                status="ok",
+                resumen="Mensaje fuera de alcance — respondido sin usar ningún tool",
+                usuario=nombre_usuario,
+                mensaje_usuario=mensaje,
+            )
 
         texto = str(resultado).strip()
         if not texto:

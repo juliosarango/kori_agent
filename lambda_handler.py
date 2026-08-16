@@ -120,9 +120,16 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
         logger.info("mensaje de chat_id=%s: %s", chat_id, text)
 
+        # first_name ya viene en el payload del webhook, no hace falta
+        # pedirlo aparte a la API — se usa solo para las trazas de
+        # guardrail/fuera-de-alcance en el dashboard (ver orchestrator.py),
+        # no como identificador real, así que un fallback genérico está bien
+        from_user = message.get("from") or {}
+        nombre_usuario = from_user.get("first_name") or "Usuario"
+
         # procesar_mensaje ya trunca a 4096 y tiene su propio try/except con
         # fallback limpio (ver agents/orchestrator.py), no lo duplicamos acá
-        reply = procesar_mensaje(chat_id=str(chat_id), mensaje=text)
+        reply = procesar_mensaje(chat_id=str(chat_id), mensaje=text, nombre_usuario=nombre_usuario)
         sent = _send_telegram_message(chat_id, reply)
         if not sent:
             logger.error("no se pudo entregar la respuesta a chat_id=%s", chat_id)

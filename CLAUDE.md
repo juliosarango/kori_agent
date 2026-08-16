@@ -68,6 +68,7 @@ Streamlit lee tabla trazas cada 2s → dashboard en pantalla del speaker
 ```
 demo-multiagente-aws/
 ├── CLAUDE.md                  # Este archivo
+├── README.md                  # Guía práctica de despliegue (setup, build, deploy, seed, webhook)
 ├── agents/
 │   └── orchestrator.py        # Strands Agent principal con los 3 tools
 ├── tools/
@@ -154,6 +155,26 @@ DYNAMO_TABLE_LEADS=demo_leads
 DYNAMO_TABLE_TRAZAS=demo_trazas
 S3_BUCKET_DOCS=demo-multiagente-docs
 ```
+
+---
+
+## Despliegue
+
+Guía completa (setup, primer deploy, seed, webhook) en `README.md`. Acá solo los dos gotchas que ya mordieron una vez, para no repetirlos:
+
+**Build:** siempre `sam build --use-container`, nunca sin ese flag. El `Makefile` (`Metadata.BuildMethod: makefile` en `template.yaml`) instala `requirements.txt` con `pip3 install` directo — sin contenedor, dependencias con extensiones compiladas (ej. `pydantic_core`, de Rust/maturin) generan wheels con el ABI del sistema local en vez del runtime real de Lambda (Amazon Linux + Python 3.12), y la Lambda revienta al arrancar.
+
+**Deploy:** `samconfig.toml` está trackeado en git y sus `parameter_overrides` para `TelegramBotToken`/`TelegramWebhookSecret` son placeholders (`"PENDIENTE-configurar-..."`) **a propósito** — nunca se completan ahí con valores reales, eso comitearía secretos en texto plano al repo. Cada deploy sobre el stack ya existente tiene que reusar los valores ya guardados, sin reescribirlos:
+
+```bash
+sam deploy \
+  --parameter-overrides \
+    'ParameterKey=TelegramBotToken,UsePreviousValue=true' \
+    'ParameterKey=TelegramWebhookSecret,UsePreviousValue=true' \
+  --no-confirm-changeset
+```
+
+`UsePreviousValue=true` le dice a CloudFormation que no toque ese parámetro. Sin esto, el deploy tomaría el placeholder literal del `samconfig.toml` y rompería `@koriagente_bot` en producción. Verificado con dry-run (`--no-execute-changeset` + `describe-change-set`): con este flag el changeset solo toca `Code` de la Lambda, nunca `Environment`.
 
 ---
 
