@@ -4,6 +4,12 @@ Solo lectura: scan de demo_leads (mensajes) y demo_trazas (orquestación) cada
 2s. No escribe en DynamoDB ni llama a Bedrock — todo eso ya pasó en Lambda
 antes de que un item aparezca acá.
 
+Layout de 3 columnas (ver CLAUDE.md, sección "Dashboard Streamlit —
+estructura"): mensajes de Telegram | trazas de tool calls normales | panel
+de seguridad (guardrail bloqueado / mensaje fuera de alcance). El panel de
+seguridad va separado a propósito — es el momento más vendible del demo y
+no puede quedar perdido entre las trazas de negocio.
+
 Se proyecta en vivo frente a ~50 personas, así que la regla de oro es: nunca
 crashear. Arranque en frío (tablas vacías, antes de la ronda 1) y fallos
 transitorios de DynamoDB son casos esperados, no excepcionales — todo scan
@@ -30,7 +36,14 @@ DYNAMO_TABLE_TRAZAS = os.environ.get("DYNAMO_TABLE_TRAZAS", "demo_trazas")
 
 REFRESH_SECONDS = 2
 MAX_LEADS_MOSTRADOS = 12
-MAX_TRAZAS_MOSTRADAS = 15
+# límites independientes por columna de trazas: la de seguridad casi
+# siempre va a tener muchas menos filas que la de tools (el guardrail no
+# bloquea en cada mensaje), así que un límite compartido dejaba la columna
+# de tools acaparando el top-N combinado y a veces vaciaba seguridad de
+# eventos que sí habían pasado. 15/10 son arbitrarios pero alcanzan de
+# sobra para 14 minutos de demo con 3 rondas.
+MAX_TRAZAS_TOOLS_MOSTRADAS = 15
+MAX_TRAZAS_SEGURIDAD_MOSTRADAS = 10
 TEXTO_MAX_CHARS = 160  # recorte para que una fila larga no reviente el layout
 
 # Paleta de marca — ver CLAUDE.md, sección "Dashboard Streamlit — estructura"
@@ -41,6 +54,10 @@ COLOR_PURPURA = "#7B2D8E"  # guardrail bloqueado — el momento dramático del d
 COLOR_ORO = "#FFD700"  # highlight puntual de status "ok", 5% de la paleta
 
 SUB_AGENTES_TOOLS = {"atencion_tool", "cotizacion_tool", "seguimiento_tool"}
+# los dos casos que agrega agents/orchestrator.py sin pasar por un tool:
+# bloqueo del guardrail antes de cualquier tool, y mensaje fuera de alcance
+# respondido directo por el orquestador
+SUB_AGENTES_SEGURIDAD = {"guardrail", "orquestador"}
 
 
 # ---------------------------------------------------------------------------
@@ -85,9 +102,26 @@ def _obtener_leads() -> list[dict[str, Any]]:
 
 
 def _obtener_trazas() -> list[dict[str, Any]]:
+    # sin slice de top-N acá a propósito: el límite por cantidad de filas
+    # se aplica por columna en _particionar_trazas, después de filtrar por
+    # tipo — si cortáramos acá, una racha de tool calls podría empujar las
+    # filas de seguridad (más escasas) fuera de la ventana antes de que
+    # lleguen a particionarse
     items = _escanear_tabla(DYNAMO_TABLE_TRAZAS)
     items.sort(key=_timestamp_ordenable, reverse=True)
-    return items[:MAX_TRAZAS_MOSTRADAS]
+    return items
+
+
+def _particionar_trazas(
+    trazas: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Un solo scan de demo_trazas por ciclo (ver _obtener_trazas) — acá se
+    reparte en Python entre la columna de tools y la de seguridad, cada una
+    con su propio límite de filas mostradas.
+    """
+    tools = [t for t in trazas if str(t.get("sub_agente")) in SUB_AGENTES_TOOLS]
+    seguridad = [t for t in trazas if str(t.get("sub_agente")) in SUB_AGENTES_SEGURIDAD]
+    return tools[:MAX_TRAZAS_TOOLS_MOSTRADAS], seguridad[:MAX_TRAZAS_SEGURIDAD_MOSTRADAS]
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +186,10 @@ def _html_una_linea(bloque_html: str) -> str:
 
 def _render_lead(item: dict[str, Any]) -> None:
     hora = _hora_legible(str(item.get("timestamp", "")))
-    telegram_id = _escapar(item.get("telegram_id", "desconocido"))
+    # first_name de Telegram en vez de chat_id — más presentable en pantalla
+    # y no expone el ID interno. Fallback a "Cliente" para filas viejas de
+    # seed_dynamodb.py que no tienen este campo (se agregó después).
+    usuario = _escapar(item.get("usuario") or "Cliente")
     mensaje = _escapar(_recortar(str(item.get("mensaje_usuario", ""))))
     respuesta = _escapar(_recortar(str(item.get("respuesta", ""))))
     sub_agente = _escapar(item.get("sub_agente_usado", "kori"))
@@ -163,7 +200,7 @@ def _render_lead(item: dict[str, Any]) -> None:
             f"""
             <div class="lead-card">
                 <div class="lead-header">
-                    <span class="mono-tag">chat {telegram_id}</span>
+                    <span class="mono-tag">{usuario}</span>
                     <span class="mono-tag mono-tiempo">{hora}</span>
                 </div>
                 <div class="lead-mensaje">&#128172; {mensaje or '<em>(sin mensaje)</em>'}</div>
@@ -253,12 +290,14 @@ def _render_traza(item: dict[str, Any]) -> None:
     )
 
 
-def _render_columna_trazas() -> None:
-    st.markdown('<h2 class="col-titulo">Trazas de orquestación</h2>', unsafe_allow_html=True)
-    trazas = _obtener_trazas()
+def _render_columna_trazas(titulo_html: str, trazas: list[dict[str, Any]], texto_vacio: str) -> None:
+    # una sola función de render para las dos columnas de trazas (tools y
+    # seguridad) — la diferencia visual entre guardrail/orquestador/tool ya
+    # la resuelve _clase_traza por fila, no hace falta duplicar el bucle
+    st.markdown(f'<h2 class="col-titulo">{titulo_html}</h2>', unsafe_allow_html=True)
     if not trazas:
         st.markdown(
-            '<div class="estado-vacio">Esperando actividad... el orquestador no registró nada todavía.</div>',
+            f'<div class="estado-vacio">{texto_vacio}</div>',
             unsafe_allow_html=True,
         )
         return
@@ -462,13 +501,30 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    col_izquierda, col_derecha = st.columns(2, gap="large")
+    trazas_tools, trazas_seguridad = _particionar_trazas(_obtener_trazas())
+
+    # anchos asimétricos: la columna de seguridad muestra menos filas y
+    # tarjetas más chicas (sin bloque de usuario en el caso "tool"), no
+    # necesita el mismo ancho que mensajes/tools
+    col_izquierda, col_centro, col_derecha = st.columns([1, 1.15, 0.85], gap="large")
     with col_izquierda:
         _render_columna_leads()
+    with col_centro:
+        _render_columna_trazas(
+            "Trazas de orquestación",
+            trazas_tools,
+            "Esperando actividad... el orquestador no registró tool calls todavía.",
+        )
     with col_derecha:
-        _render_columna_trazas()
+        _render_columna_trazas(
+            "&#128680; Seguridad",
+            trazas_seguridad,
+            "Esperando actividad... sin bloqueos de guardrail ni mensajes fuera de alcance.",
+        )
 
-    # refresh de 2s: nota de costo (ver CLAUDE.md) — dos scan() por ciclo
+    # refresh de 2s: nota de costo (ver CLAUDE.md) — un solo scan() de
+    # demo_trazas por ciclo (se particiona en Python entre las dos
+    # columnas, no se duplica la llamada a DynamoDB) más uno de demo_leads,
     # sobre tablas chicas, muy por debajo del free tier de DynamoDB
     # on-demand; no mover este intervalo sin re-chequear el presupuesto
     # (~$0.50/mes estimado para DynamoDB en el proyecto).

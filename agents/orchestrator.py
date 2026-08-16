@@ -31,11 +31,12 @@ Notas sobre la API real de strands-agents 1.52 (CLAUDE.md trae pseudocódigo):
 import logging
 import os
 import time
+from typing import Any
 
 from strands import Agent, tool
 from strands.models.bedrock import BedrockModel
 
-from hooks.tracer import escribir_traza, tracer_hook
+from hooks.tracer import escribir_lead, escribir_traza, tracer_hook
 from tools.atencion_tool import atencion_tool
 from tools.cotizacion_tool import cotizacion_tool
 from tools.seguimiento_tool import _consultar_historial
@@ -177,15 +178,54 @@ def _registrar_traza_sin_tool(
         logger.exception("orchestrator: fallo escribiendo traza sin tool call")
 
 
+def _sub_agente_usado(resultado: Any) -> str:
+    """Nombre para demo_leads.sub_agente_usado: qué atendió este mensaje."""
+    if getattr(resultado, "stop_reason", None) == "guardrail_intervened":
+        return "guardrail"
+    tool_metrics = resultado.metrics.tool_metrics
+    if not tool_metrics:
+        return "orquestador"
+    # el system_prompt pide un solo tool por turno; el "+" es solo defensa
+    # por si alguna vez el LLM encadena más de uno en la misma respuesta
+    return "+".join(tool_metrics.keys())
+
+
+def _registrar_lead(
+    chat_id: str,
+    mensaje: str,
+    sub_agente_usado: str,
+    respuesta: str,
+    duracion_ms: float,
+    nombre_usuario: str,
+) -> None:
+    """demo_leads no se estaba escribiendo nunca en tiempo real — solo tenía
+    el dato de prueba de seed_dynamodb.py. seguimiento_tool (Ronda 3 del
+    demo) consulta justo esta tabla por chat_id, así que sin este write
+    "¿cuál fue mi solicitud anterior?" no encontraba nada real en vivo.
+    Se llama una vez por mensaje, para los 3 casos (tool, guardrail,
+    fuera de alcance) — igual de defensivo que _registrar_traza_sin_tool."""
+    try:
+        escribir_lead(
+            telegram_id=chat_id,
+            mensaje_usuario=mensaje[:MENSAJE_USUARIO_MAX_CHARS],
+            sub_agente_usado=sub_agente_usado,
+            respuesta=respuesta,
+            duracion_ms=duracion_ms,
+            usuario=nombre_usuario,
+        )
+    except Exception:
+        logger.exception("orchestrator: fallo escribiendo lead")
+
+
 def procesar_mensaje(chat_id: str, mensaje: str, nombre_usuario: str = "Usuario") -> str:
     """Punto de entrada: construye el orquestador para este chat_id y
     procesa el mensaje. Usado por lambda_handler.py.
 
     nombre_usuario es el first_name de Telegram (viene del payload del
-    webhook, sin llamada extra a la API) — solo se usa para las trazas de
-    guardrail/fuera-de-alcance, así el dashboard puede mostrar "Julio
-    preguntó X, quedó bloqueado" sin exponer el chat_id ni el @username
-    público en pantalla."""
+    webhook, sin llamada extra a la API) — se usa en las trazas de
+    guardrail/fuera-de-alcance y en cada renglón de demo_leads, así el
+    dashboard puede mostrar "Julio preguntó X" en vez del chat_id o el
+    @username público en pantalla."""
     try:
         orchestrator = build_orchestrator(chat_id)
 
@@ -222,9 +262,20 @@ def procesar_mensaje(chat_id: str, mensaje: str, nombre_usuario: str = "Usuario"
             )
 
         texto = str(resultado).strip()
-        if not texto:
-            return MENSAJE_FALLBACK
-        return _truncar_para_telegram(texto)
+        respuesta_final = _truncar_para_telegram(texto) if texto else MENSAJE_FALLBACK
+
+        # demo_leads: un renglón por interacción completa, con la respuesta
+        # tal cual se le mandó al cliente — lo que consulta seguimiento_tool
+        _registrar_lead(
+            chat_id=chat_id,
+            mensaje=mensaje,
+            sub_agente_usado=_sub_agente_usado(resultado),
+            respuesta=respuesta_final,
+            duracion_ms=duracion_ms,
+            nombre_usuario=nombre_usuario,
+        )
+
+        return respuesta_final
     except Exception:
         logger.exception("error inesperado procesando mensaje en orchestrator")
         return MENSAJE_FALLBACK

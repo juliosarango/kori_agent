@@ -41,6 +41,11 @@ LEADS_DE_PRUEBA: list[dict[str, Any]] = [
         "sub_agente_usado": "atencion_tool",
         "respuesta": "Tenemos cerámica de piso 45x45 Andina, cerámica de pared 30x60 y porcelanato 60x60 Mármol Carrara, entre otros.",
         "duracion_ms": 850,
+        # campo agregado después de sembrar por primera vez (ver
+        # orchestrator.py::_registrar_lead) — el dashboard lo usa en vez
+        # del telegram_id en el encabezado, se siembra acá para no
+        # depender siempre del fallback "Cliente" en pruebas locales
+        "usuario": "Cliente de prueba",
     },
     {
         "telegram_id": TEST_TELEGRAM_ID,
@@ -49,6 +54,7 @@ LEADS_DE_PRUEBA: list[dict[str, Any]] = [
         "sub_agente_usado": "cotizacion_tool",
         "respuesta": "80m² de Porcelanato 60x60 Mármol Carrara a $32.00/m² = $2,560.00.",
         "duracion_ms": 1120,
+        "usuario": "Cliente de prueba",
     },
 ]
 

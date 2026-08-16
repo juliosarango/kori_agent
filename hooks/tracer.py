@@ -1,7 +1,14 @@
 """Hook de trazado (Kori Agent) — alimenta el dashboard Streamlit en vivo.
 
-Escribe un ítem en demo_trazas por cada tool que termina de ejecutarse.
-Streamlit hace scan() de esa tabla cada 2s, así que esto tiene que ser
+Escribe un ítem en demo_trazas por cada tool que termina de ejecutarse
+(vía KoriTracerHook), y expone escribir_lead() para que orchestrator.py
+registre en demo_leads un renglón por interacción completa — la tabla que
+consulta seguimiento_tool (Ronda 3 del demo) y que alimenta la columna de
+mensajes del dashboard. El nombre del módulo quedó corto para lo segundo,
+pero es el mismo patrón (escribir para el dashboard, nunca tumbar la
+respuesta a Telegram si falla) así que vive acá y no en un archivo nuevo.
+
+Streamlit hace scan() de estas tablas cada 2s, así que esto tiene que ser
 rápido y, sobre todo, nunca puede tumbar la respuesta al usuario de
 Telegram por un problema de trazado (tabla caída, permisos, etc.).
 
@@ -47,8 +54,45 @@ logger = logging.getLogger(__name__)
 
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 DYNAMO_TABLE_TRAZAS = os.environ.get("DYNAMO_TABLE_TRAZAS", "demo_trazas")
+DYNAMO_TABLE_LEADS = os.environ.get("DYNAMO_TABLE_LEADS", "demo_leads")
 
 RESUMEN_MAX_CHARS = 100
+
+
+def escribir_lead(
+    telegram_id: str,
+    mensaje_usuario: str,
+    sub_agente_usado: str,
+    respuesta: str,
+    duracion_ms: float,
+    usuario: str,
+) -> None:
+    """Escribe un item en demo_leads — un renglón por interacción completa
+    (a diferencia de demo_trazas, que es por tool call). La llama
+    orchestrator.py al final de procesar_mensaje(), una vez por mensaje,
+    para los 3 casos (tool usado, guardrail bloqueó, fuera de alcance sin
+    tool). PK telegram_id, SK timestamp — ver CLAUDE.md.
+
+    usuario (first_name de Telegram) no estaba en el schema original de
+    demo_leads; se agrega acá para que el dashboard pueda mostrar el nombre
+    en vez del chat_id en el encabezado de cada tarjeta."""
+    item = {
+        "telegram_id": telegram_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "mensaje_usuario": mensaje_usuario,
+        "sub_agente_usado": sub_agente_usado,
+        "respuesta": respuesta,
+        "duracion_ms": Decimal(str(round(duracion_ms, 2))),
+        "usuario": usuario,
+    }
+    try:
+        dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+        table = dynamodb.Table(DYNAMO_TABLE_LEADS)
+        table.put_item(Item=item)
+    except (ClientError, BotoCoreError) as exc:
+        logger.exception("tracer: fallo de AWS escribiendo lead en %s: %s", DYNAMO_TABLE_LEADS, exc)
+    except Exception:
+        logger.exception("tracer: error inesperado escribiendo lead")
 
 
 def _extraer_texto_resultado(event: AfterToolCallEvent) -> str:

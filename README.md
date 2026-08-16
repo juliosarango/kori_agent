@@ -126,7 +126,12 @@ ssh -i /ruta/a/n8n-key.pem ec2-user@3.95.210.95
 git clone https://github.com/juliosarango/kori_agent.git
 cd kori_agent
 
-python3 -m venv .venv-dashboard
+
+# Amazon Linux 2023 trae Python 3.9 como python3 del sistema — no lo toques
+# (dnf/yum dependen de esa versión exacta). Instalá 3.12 aparte y usalo explícito:
+sudo dnf install -y python3.12 python3.12-pip
+
+python3.12 -m venv .venv-dashboard
 .venv-dashboard/bin/pip install -r dashboard/requirements.txt
 
 export AWS_REGION=us-east-1

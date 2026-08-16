@@ -104,11 +104,11 @@ Atributos: nombre, descripcion, precio_unitario, unidad, stock_disponible
 ```
 
 ### `demo_leads`
-Registro de cada interacción. Persiste entre rondas del demo.
+Registro de cada interacción. Persiste entre rondas del demo. Se escribe una vez por mensaje al final de `orchestrator.py::procesar_mensaje()` (los 3 casos: tool usado, guardrail bloqueó, fuera de alcance sin tool) — es lo que consulta `seguimiento_tool` (Ronda 3) y lo que alimenta la columna de mensajes del dashboard.
 ```
 PK: telegram_id (String)
 SK: timestamp (String — ISO 8601)
-Atributos: mensaje_usuario, sub_agente_usado, respuesta, duracion_ms
+Atributos: mensaje_usuario, sub_agente_usado, respuesta, duracion_ms, usuario (first_name de Telegram)
 ```
 
 ### `demo_trazas`
@@ -267,9 +267,17 @@ orchestrator = Agent(
 
 ```python
 # dashboard/app.py
-# Layout: 2 columnas
-# Columna izquierda:  mensajes recientes de Telegram (tabla demo_leads)
-# Columna derecha:    trazas de orquestación (tabla demo_trazas)
+# Layout: 3 columnas
+# Columna 1 (izquierda): mensajes recientes de Telegram (tabla demo_leads)
+# Columna 2 (centro):    trazas de tool calls normales — demo_trazas donde
+#                        sub_agente in {atencion_tool, cotizacion_tool, seguimiento_tool}
+# Columna 3 (derecha):   panel de seguridad — demo_trazas donde
+#                        sub_agente in {guardrail, orquestador} (bloqueo del
+#                        guardrail o mensaje fuera de alcance respondido sin
+#                        tool). Separado a propósito: es el momento más
+#                        vendible del demo (bloqueo de un intento adversario
+#                        en vivo) y no puede quedar mezclado/perdido entre
+#                        las trazas normales de negocio.
 # Refresh: st.rerun() cada 2 segundos
 ```
 
