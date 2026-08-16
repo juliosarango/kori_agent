@@ -152,6 +152,13 @@ def procesar_mensaje(chat_id: str, mensaje: str) -> str:
     try:
         orchestrator = build_orchestrator(chat_id)
         resultado = orchestrator(mensaje)
+
+        # a diferencia de atencion_tool (que llama converse() directo), acá
+        # no hay tool call de por medio cuando el guardrail bloquea al nivel
+        # del orquestador mismo — sin esto, ese caso queda invisible en logs
+        if getattr(resultado, "stop_reason", None) == "guardrail_intervened":
+            logger.info("orchestrator: guardrail intervino antes de llamar ningún tool")
+
         texto = str(resultado).strip()
         if not texto:
             return MENSAJE_FALLBACK
