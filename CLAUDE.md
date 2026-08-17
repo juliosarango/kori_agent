@@ -46,19 +46,22 @@ Telegram
     ↓
 API Gateway (webhook POST)
     ↓
-Lambda — lambda_handler.py
+Lambda — lambda_handler.py (extrae chat_id + first_name del payload)
     ↓
 Orquestador (Strands Agent + Bedrock Sonnet)
-    ↓ clasifica intención y llama el tool correcto
-    ├── atencion_tool()     → RAG sobre S3 (FAQ + catálogo)
-    ├── cotizacion_tool()   → consulta DynamoDB tabla productos
-    └── seguimiento_tool()  → consulta DynamoDB tabla leads
+    ↓ clasifica intención — 3 caminos posibles:
+    ├── llama un tool         → atencion_tool / cotizacion_tool / seguimiento_tool
+    │                            (hook AfterToolCallEvent → traza en demo_trazas)
+    ├── guardrail bloquea     → antes de llamar cualquier tool (traza sub_agente="guardrail")
+    └── fuera de alcance      → responde sin tool (traza sub_agente="orquestador")
     ↓
-Hook AfterToolCallEvent → escribe traza en DynamoDB tabla trazas
+Al final de cada mensaje (los 3 caminos): renglón nuevo en demo_leads
+(mensaje, respuesta, usuario, sub_agente_usado, duracion_ms)
     ↓
 Respuesta → Telegram
     ↓ (paralelo)
-Streamlit lee tabla trazas cada 2s → dashboard en pantalla del speaker
+Streamlit escanea demo_leads + demo_trazas cada 2s → dashboard de 3
+columnas (mensajes / trazas de tools / seguridad) en pantalla del speaker
 ```
 
 ---
@@ -82,7 +85,10 @@ demo-multiagente-aws/
 │   ├── precios.json           # Tabla de precios
 │   └── faq.md                 # Preguntas frecuentes para el RAG
 ├── dashboard/
-│   └── app.py                 # Streamlit — 2 columnas: mensajes + trazas
+│   ├── app.py                 # Streamlit — 3 columnas: mensajes / trazas tools / seguridad
+│   └── requirements.txt       # streamlit + boto3, se instala en la EC2, no en Lambda
+├── .streamlit/
+│   └── config.toml            # theme oscuro a nivel de servidor (evita flash blanco)
 ├── scripts/
 │   ├── seed_dynamodb.py       # Poblar las 3 tablas con datos de prueba
 │   └── set_webhook.py         # Registrar URL del webhook en Telegram
@@ -112,12 +118,14 @@ Atributos: mensaje_usuario, sub_agente_usado, respuesta, duracion_ms, usuario (f
 ```
 
 ### `demo_trazas`
-Alimenta el dashboard Streamlit en tiempo real.
+Alimenta el dashboard Streamlit en tiempo real. Un renglón por tool call (`KoriTracerHook`, vía `AfterToolCallEvent`) o por los dos casos que no pasan por ningún tool (guardrail bloqueando, mensaje fuera de alcance — escritos directo desde `orchestrator.py::procesar_mensaje()`).
 ```
 PK: evento_id (String — uuid4)
 Atributos: timestamp, sub_agente, duracion_ms, status, resumen
+Atributos opcionales (solo si sub_agente es "guardrail" u "orquestador"):
+  usuario (first_name de Telegram), mensaje_usuario (lo que escribió el cliente)
 ```
-Streamlit hace `scan` de esta tabla cada 2 segundos ordenado por timestamp desc.
+Streamlit hace `scan` de esta tabla cada 2 segundos ordenado por timestamp desc, y particiona en Python entre la columna de trazas de tools (`sub_agente` en `{atencion_tool, cotizacion_tool, seguimiento_tool}`) y la columna de seguridad (`sub_agente` en `{guardrail, orquestador}`).
 
 ---
 
@@ -314,13 +322,14 @@ orchestrator = Agent(
 - [x] Pruebas end-to-end de los 3 flujos desde Telegram real
 
 ### Semana 3 — 29 ago al 4 sep | Dashboard y ensayo — EN CURSO
-- [x] `dashboard/app.py` Streamlit funcional con datos reales (16 ago)
-- [ ] Deploy Streamlit en EC2 — reusando instancia `n8n-app` ya corriendo (`i-052bd40fd9843cc27`), no una t3.micro nueva. Puerto 8501 ya abierto en el security group `launch-wizard-7`. Falta: instalar deps + correr el proceso en la instancia (ver `README.md`).
-- [ ] Ensayo completo cronometrado (objetivo: 3 rondas en 14 minutos)
+- [x] `dashboard/app.py` Streamlit funcional con datos reales (16 ago) — layout de 3 columnas (mensajes / trazas de tools / seguridad)
+- [x] Fix crítico: `demo_leads` no se escribía en tiempo real — `seguimiento_tool` no encontraba historial real. Corregido y validado en producción con Telegram real (16 ago): `telegram_id` real, `usuario` (first_name), mensajes/respuestas/cotización multi-producto todo correcto.
+- [x] Deploy Streamlit en EC2 (16 ago) — reusando instancia `n8n-app` ya corriendo (`i-052bd40fd9843cc27`), no una t3.micro nueva. Puerto 8501, IAM instance profile de solo lectura, corriendo como servicio `systemd` (`kori-dashboard.service`, `enable --now`) — sobrevive crashes y reinicios de la instancia, confirmado `active (running)`. `http://3.95.210.95:8501`.
+- [ ] Ensayo completo cronometrado (objetivo: 3 rondas en 14 minutos) — incluir explícitamente probar Ronda 3 (seguimiento) ahora que depende de datos reales de `demo_leads`, no solo del seed.
 - [ ] Documentar Plan B (qué hacer si Telegram falla: usar curl o Postman en pantalla)
 - [ ] Ensayo grabado sin errores → señal de go para el evento
 
-**Próximo paso al retomar:** desplegar `dashboard/app.py` en la instancia EC2 `n8n-app` (pasos en `README.md`) — falta resolver cómo la instancia obtiene credenciales de AWS para leer DynamoDB (no tiene IAM instance profile asociado hoy). El sistema completo (webhook → orquestador → 3 tools → guardrail → trazas) ya funciona en producción, probado desde Telegram real.
+**Próximo paso al retomar:** ensayo completo cronometrado (3 rondas, objetivo 14 minutos) — probar explícitamente la Ronda 3 (seguimiento) en el ensayo, ya que ahora depende de datos reales de `demo_leads`, no del seed. Después, documentar Plan B y grabar el ensayo final. El sistema completo (webhook → orquestador → 3 tools/guardrail/fuera-de-alcance → trazas → leads → dashboard) ya funciona en producción, probado desde Telegram real, y el dashboard ya está corriendo 24/7 en la EC2 (`http://3.95.210.95:8501`, servicio `kori-dashboard.service`).
 
 ---
 

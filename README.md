@@ -111,7 +111,17 @@ Es idempotente — sobrescribe por `producto_id`, no duplica. Ver `CLAUDE.md`, s
 
 ## Dashboard Streamlit (EC2)
 
+**Ya está desplegado y corriendo en producción** como servicio `systemd` (`kori-dashboard.service`, `enable --now`, sobrevive crashes y reinicios de la instancia) — `http://3.95.210.95:8501`. Esta sección queda documentada por si hay que redesplegar desde cero (instancia nueva, o esta se pierde).
+
 El dashboard **no levanta una instancia nueva** — corre en la misma EC2 que ya tenés viva para otra cosa (`n8n-app`, `i-052bd40fd9843cc27`, Amazon Linux 2023, IP pública `3.95.210.95`). Puerto usado: **8501** (el 80/443 ya los ocupa lo que sea que sirva n8n ahí, no se tocan).
+
+Para chequear el estado o los logs del servicio ya corriendo:
+
+```bash
+ssh -i /ruta/a/n8n-key.pem ec2-user@3.95.210.95
+sudo systemctl status kori-dashboard    # esperado: active (running)
+sudo journalctl -u kori-dashboard -f    # logs en vivo
+```
 
 Ya resuelto de antemano (no hace falta repetirlo):
 - Security group `launch-wizard-7` → regla nueva `8501/tcp` desde `0.0.0.0/0` agregada, sin tocar las reglas existentes de 22/80/443.
@@ -143,7 +153,7 @@ export DYNAMO_TABLE_TRAZAS=demo_trazas
   --server.port 8501 --server.address 0.0.0.0
 ```
 
-Con esto ya se ve en `http://3.95.210.95:8501`. Para que sobreviva el cierre de la sesión SSH y se reinicie solo si crashea a mitad del ensayo/evento, conviene un servicio systemd en vez de dejarlo corriendo en la terminal:
+Con esto ya se ve en `http://3.95.210.95:8501`, pero corriendo así muere apenas cerrás la sesión SSH. Para que sobreviva eso y se reinicie solo si crashea a mitad del ensayo/evento — que es como está desplegado hoy — usá un servicio systemd en vez de dejarlo colgado en la terminal:
 
 ```bash
 sudo tee /etc/systemd/system/kori-dashboard.service > /dev/null <<'EOF'
