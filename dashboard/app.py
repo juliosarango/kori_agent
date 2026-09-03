@@ -350,7 +350,7 @@ h1, h2, h3, .col-titulo {{
 .titulo-principal {{
     font-family: 'Montserrat', 'Segoe UI', sans-serif;
     font-weight: 800;
-    font-size: 1.15rem;
+    font-size: 3.0rem !important;
     color: {COLOR_ORO};
     margin-bottom: 0;
 }}
@@ -372,7 +372,7 @@ h1, h2, h3, .col-titulo {{
 }}
 
 .col-titulo {{
-    font-size: 1.15rem;
+    font-size: 1.5rem !important;
     margin: 0;
 }}
 
