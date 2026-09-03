@@ -180,6 +180,19 @@ def _html_una_linea(bloque_html: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Render — encabezado de columna (título + contador de items en el card)
+# ---------------------------------------------------------------------------
+
+
+def _render_titulo_columna(titulo_html: str, contador: int) -> None:
+    st.markdown(
+        f'<div class="col-header"><h2 class="col-titulo">{titulo_html}</h2>'
+        f'<span class="col-contador">{contador}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Render — columna izquierda (demo_leads)
 # ---------------------------------------------------------------------------
 
@@ -217,8 +230,8 @@ def _render_lead(item: dict[str, Any]) -> None:
 
 
 def _render_columna_leads() -> None:
-    st.markdown('<h2 class="col-titulo">Mensajes de Telegram</h2>', unsafe_allow_html=True)
     leads = _obtener_leads()
+    _render_titulo_columna("Mensajes de Telegram", len(leads))
     if not leads:
         st.markdown(
             '<div class="estado-vacio">Esperando actividad... aún no llegan mensajes.</div>',
@@ -294,7 +307,7 @@ def _render_columna_trazas(titulo_html: str, trazas: list[dict[str, Any]], texto
     # una sola función de render para las dos columnas de trazas (tools y
     # seguridad) — la diferencia visual entre guardrail/orquestador/tool ya
     # la resuelve _clase_traza por fila, no hace falta duplicar el bucle
-    st.markdown(f'<h2 class="col-titulo">{titulo_html}</h2>', unsafe_allow_html=True)
+    _render_titulo_columna(titulo_html, len(trazas))
     if not trazas:
         st.markdown(
             f'<div class="estado-vacio">{texto_vacio}</div>',
@@ -337,23 +350,40 @@ h1, h2, h3, .col-titulo {{
 .titulo-principal {{
     font-family: 'Montserrat', 'Segoe UI', sans-serif;
     font-weight: 800;
-    font-size: 2.4rem;
+    font-size: 1.15rem;
     color: {COLOR_ORO};
     margin-bottom: 0;
 }}
 
 .subtitulo-principal {{
     font-family: 'Open Sans', 'Segoe UI', sans-serif;
-    font-size: 1.1rem;
+    font-size: 1.4rem;
     color: {COLOR_TURQUESA};
     margin-top: 0;
 }}
 
-.col-titulo {{
-    font-size: 1.5rem;
+.col-header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
     border-bottom: 2px solid {COLOR_TURQUESA};
     padding-bottom: 0.4rem;
     margin-bottom: 1rem;
+}}
+
+.col-titulo {{
+    font-size: 1.15rem;
+    margin: 0;
+}}
+
+.col-contador {{
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 1rem;
+    color: {COLOR_ORO};
+    background-color: rgba(255, 215, 0, 0.12);
+    border-radius: 999px;
+    padding: 0.1rem 0.7rem;
+    white-space: nowrap;
 }}
 
 .mono-tag {{
